@@ -4,6 +4,7 @@ Offline macOS app (distributed as a `.dmg`) for creating pixel masks on FITS ima
 
 ## Download
 The app can be downloaded simply by clicking on the following button:
+
 [![Download FITSme](https://img.shields.io/badge/Download-FITSme-blue?style=for-the-badge&logo=apple)](https://raw.githubusercontent.com/hkrizic/FITSme/main/FITSme.dmg)
 
 ## Features

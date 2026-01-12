@@ -18,9 +18,7 @@ Offline macOS app (distributed as a `.dmg`) for creating pixel masks on FITS ima
 
 ## Important Information
 
-If macOS shows the message  
-*“FITSme” Not Opened; Apple could not verify “FITSme” is free of malware that may harm your Mac or compromise your privacy.*
-this is normal for apps that are not distributed via the App Store.
+If macOS shows the message: `"FITSme” Not Opened; Apple could not verify “FITSme” is free of malware that may harm your Mac or compromise your privacy`, this is normal for apps that are not distributed via the App Store.
 
 To open the app anyway:
 

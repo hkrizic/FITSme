@@ -14,6 +14,23 @@
             const localSrc = "fits.js";
             const cdnSrc = "https://unpkg.com/fitsjs/lib/fits.js";
             const markReady = () => {
+                // Patch _getFrameAsync to avoid Web Worker which silently fails
+                // in many contexts (file://, strict CSP, Safari, etc.)
+                if (window.astro && astro.FITS && astro.FITS.Image) {
+                    astro.FITS.Image.prototype._getFrameAsync = function(buffers, callback, opts) {
+                        var pixels = null;
+                        var start = 0;
+                        for (var i = 0; i < this.nBuffers; i++) {
+                            var arr = this._getFrame(buffers[i], this.bitpix, this.bzero, this.bscale);
+                            if (pixels == null) {
+                                pixels = new arr.constructor(this.width * this.height);
+                            }
+                            pixels.set(arr, start);
+                            start += arr.length;
+                        }
+                        this.invoke(callback, opts, pixels);
+                    };
+                }
                 if (window.__fitsReadyResolve) window.__fitsReadyResolve();
             };
             const script = document.createElement("script");
@@ -313,6 +330,77 @@
             pointer-events: none;
         }
 
+        /* HDU Picker */
+        #hduPickerOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 200;
+            justify-content: center;
+            align-items: center;
+        }
+        #hduPickerOverlay.visible { display: flex; }
+        #hduPicker {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 24px;
+            min-width: 320px;
+            max-width: 460px;
+            box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+        }
+        #hduPicker h3 {
+            margin: 0 0 6px;
+            font-size: 15px;
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+        #hduPicker .hdu-subtitle {
+            margin: 0 0 16px;
+            font-size: 12px;
+            color: #666;
+        }
+        #hduList {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+        .hdu-option {
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+            padding: 10px 14px;
+            background: #252525;
+            border: 1px solid #333;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.12s ease;
+        }
+        .hdu-option:hover {
+            background: #2a2a2a;
+            border-color: #3b82f6;
+        }
+        .hdu-option .hdu-idx {
+            font-size: 11px;
+            font-weight: 700;
+            color: #888;
+            min-width: 18px;
+        }
+        .hdu-option .hdu-name {
+            font-size: 13px;
+            font-weight: 500;
+            color: #e0e0e0;
+        }
+        .hdu-option .hdu-detail {
+            font-size: 11px;
+            color: #666;
+            margin-left: auto;
+            white-space: nowrap;
+        }
+
         .canvas-stack {
             position: relative;
             box-shadow: 0 4px 40px rgba(0,0,0,0.8);
@@ -496,6 +584,14 @@
         <button class="primary" id="exportBtn" disabled>Export Mask FITS</button>
         <button class="primary" id="exportMaskedBtn" disabled>Export Masked FITS</button>
         <button class="primary" id="exportRegBtn" disabled>Export .reg</button>
+    </div>
+</div>
+
+<div id="hduPickerOverlay">
+    <div id="hduPicker">
+        <h3>Multiple extensions found</h3>
+        <p class="hdu-subtitle">Choose which HDU to open:</p>
+        <div id="hduList"></div>
     </div>
 </div>
 
@@ -1121,9 +1217,75 @@
         e.target.value = '';
     }
 
+    function loadHDU(fitsObj, hduIndex) {
+        const dataUnit = fitsObj.getDataUnit(hduIndex);
+        if (dataUnit && dataUnit.width && dataUnit.height) {
+            rawWidth = dataUnit.width;
+            rawHeight = dataUnit.height;
+            statusDiv.style.display = 'block';
+            statusDiv.textContent = "Processing " + rawWidth + " × " + rawHeight + " image...";
+            // Yield to render status, then process (can be heavy for large images)
+            setTimeout(function () {
+                dataUnit.getFrame(0, function (data) {
+                    initApp(data, rawWidth, rawHeight);
+                });
+            }, 0);
+        } else {
+            statusDiv.style.display = 'block';
+            statusDiv.textContent = "Error: Selected HDU has no image data.";
+        }
+    }
+
+    function showHDUPicker(fitsObj, imageHDUs) {
+        const overlay = document.getElementById('hduPickerOverlay');
+        const list = document.getElementById('hduList');
+        list.innerHTML = '';
+
+        imageHDUs.forEach(function (info) {
+            const btn = document.createElement('div');
+            btn.className = 'hdu-option';
+
+            const idx = document.createElement('span');
+            idx.className = 'hdu-idx';
+            idx.textContent = '#' + info.index;
+
+            const name = document.createElement('span');
+            name.className = 'hdu-name';
+            name.textContent = info.name;
+
+            const detail = document.createElement('span');
+            detail.className = 'hdu-detail';
+            detail.textContent = info.dims;
+
+            btn.appendChild(idx);
+            btn.appendChild(name);
+            btn.appendChild(detail);
+
+            btn.addEventListener('click', function () {
+                overlay.classList.remove('visible');
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = "Loading HDU #" + info.index + "...";
+                setTimeout(function () { loadHDU(fitsObj, info.index); }, 0);
+            });
+
+            list.appendChild(btn);
+        });
+
+        statusDiv.style.display = 'none';
+        overlay.classList.add('visible');
+        overlay.onclick = function (e) {
+            if (e.target === overlay) {
+                overlay.classList.remove('visible');
+                statusDiv.style.display = 'block';
+                statusDiv.textContent = "Load a FITS file to begin";
+            }
+        };
+    }
+
     async function loadFitsFile(file) {
+        document.getElementById('hduPickerOverlay').classList.remove('visible');
         statusDiv.style.display = 'block';
-        statusDiv.textContent = "Loading...";
+        statusDiv.textContent = "Reading file...";
         canvasContainer.style.display = 'none';
         exportBtn.disabled = true;
         exportMaskedBtn.disabled = true;
@@ -1136,16 +1298,47 @@
             return;
         }
 
-        new astro.FITS(file, function () {
-            const dataUnit = this.getDataUnit();
-            if (dataUnit) {
-                rawWidth = dataUnit.width;
-                rawHeight = dataUnit.height;
-                dataUnit.getFrame(0, function (data) {
-                    initApp(data, rawWidth, rawHeight);
-                });
-            }
-        });
+        try {
+            // Read entire file into ArrayBuffer for reliable synchronous parsing
+            const arrayBuffer = await file.arrayBuffer();
+            statusDiv.textContent = "Parsing FITS...";
+            // Yield to let status text render before sync parsing
+            await new Promise(r => setTimeout(r, 0));
+
+            new astro.FITS(arrayBuffer, function () {
+                const fitsObj = this;
+                // Find all HDUs that contain image data
+                const imageHDUs = [];
+                if (fitsObj.hdus) {
+                    for (let i = 0; i < fitsObj.hdus.length; i++) {
+                        const hdu = fitsObj.hdus[i];
+                        if (hdu.data && hdu.data.width && hdu.data.height) {
+                            const header = hdu.header;
+                            const extname = header.get('EXTNAME') || (i === 0 ? 'Primary' : 'Extension');
+                            const w = hdu.data.width;
+                            const h = hdu.data.height;
+                            const bitpix = header.get('BITPIX');
+                            imageHDUs.push({
+                                index: i,
+                                name: extname,
+                                dims: w + ' × ' + h + (bitpix ? '  (' + bitpix + '-bit)' : '')
+                            });
+                        }
+                    }
+                }
+
+                if (imageHDUs.length === 0) {
+                    statusDiv.textContent = "Error: No image data found in FITS file.";
+                } else if (imageHDUs.length === 1) {
+                    loadHDU(fitsObj, imageHDUs[0].index);
+                } else {
+                    showHDUPicker(fitsObj, imageHDUs);
+                }
+            });
+        } catch (err) {
+            statusDiv.textContent = "Error reading FITS file: " + err.message;
+            console.error(err);
+        }
     }
 
     async function tryAutoLoadFromServer() {

@@ -72,7 +72,11 @@
       this.end = this.BLOCKLENGTH;
       this.offset = 0;
       this.headerStorage = new Uint8Array();
-      if (typeof this.arg === 'string') {
+      if (this.arg instanceof ArrayBuffer) {
+        this.readNextBlock = this._readBlockFromBuffer;
+        this.length = this.arg.byteLength;
+        this.readFromBuffer();
+      } else if (typeof this.arg === 'string') {
         this.readNextBlock = this._readBlockFromBuffer;
         xhr = new XMLHttpRequest();
         xhr.open('GET', this.arg);
@@ -113,6 +117,11 @@
 
     Parser.prototype.readBlock = function(block) {
       var arr, dataLength, dataunit, header, rowIndex, rows, s, slice, tmp, value, _i, _len, _ref;
+      if (block.byteLength === 0 || this.begin + this.offset >= this.length) {
+        this.headerStorage = null;
+        this.invoke(this.callback, this.opts, this);
+        return;
+      }
       arr = new Uint8Array(block);
       tmp = new Uint8Array(this.headerStorage);
       this.headerStorage = new Uint8Array(this.end);
@@ -136,11 +145,15 @@
           dataLength = header.getDataLength();
           slice = this.arg.slice(this.start, this.start + dataLength);
           if (header.hasDataUnit()) {
-            dataunit = this.createDataUnit(header, slice);
+            try {
+              dataunit = this.createDataUnit(header, slice);
+            } catch (_e) {
+              dataunit = void 0;
+            }
           }
           this.hdus.push(new HDU(header, dataunit));
           this.offset += this.end + dataLength + this.excessBytes(dataLength);
-          if (this.offset === this.length) {
+          if (this.offset >= this.length) {
             this.headerStorage = null;
             this.invoke(this.callback, this.opts, this);
             return;
@@ -199,8 +212,8 @@
       var parser,
         _this = this;
       this.arg = arg;
-      parser = new Parser(this.arg, function(fits) {
-        _this.hdus = parser.hdus;
+      parser = new Parser(this.arg, function(p) {
+        _this.hdus = p.hdus;
         return _this.invoke(callback, opts, _this);
       });
     }

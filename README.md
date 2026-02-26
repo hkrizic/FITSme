@@ -1,15 +1,13 @@
-# FITSme (FITS Mask Editor for macOS)
+# FITSme (FITS Mask Editor for macOS or Web)
 
-Offline macOS app (distributed as a `.dmg`) for creating pixel masks on FITS images. Paint mask regions, preview the masked .fits file, and export FITS or DS9 region files. The app can also be used as a .fits image viewer.
+Offline macOS app (distributed as a `.dmg`) or Web App for creating pixel masks on FITS images. Paint mask regions, preview the masked .fits file, and export FITS or DS9 region files. The app can also be used as a .fits image viewer.
 
 ## Download
 The app can be downloaded simply by clicking on the following button:
 
 [![Download FITSme](https://img.shields.io/badge/Download-FITSme-white?style=for-the-badge&logo=apple)](https://raw.githubusercontent.com/hkrizic/FITSme/main/FITSme.dmg)
 
-One can also use the Web-version:
-
-[![Web Version](https://img.shields.io/badge/Web_Version-FITSme-white?style=for-the-badge)](https://hrvojekrizic.ch/fme/Masking.html)
+One can also use the Web-version by cloning the repository and launching `Masking.html`
 
 ## Features
 - Load FITS images (.fits, .fit) via local file input.
